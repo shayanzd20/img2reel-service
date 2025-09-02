@@ -1,5 +1,5 @@
 # Dockerfile
-FROM node:20-alpine3.18 AS build
+FROM node:20-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
