@@ -1,9 +1,11 @@
-const express = require('express');
-const multer = require('multer');
-const { v4: uuidv4 } = require('uuid');
-const path = require('path');
-const fs = require('fs');
-const ffmpeg = require('fluent-ffmpeg');
+import express from 'express';
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import fs from 'fs';
+import ffmpeg from 'fluent-ffmpeg';
+import fs from 'fs';
+import path from 'path';
 
 const app = express();
 const upload = multer({ dest: '/tmp' });
@@ -15,8 +17,9 @@ const PORT = process.env.PORT || 3001;
 
 // Ensure persistent dir exists (will be mounted via Render disk)
 const VIDEO_DIR = process.env.VIDEO_DIR || '/app/data/videos';
-fs.mkdirSync(VIDEO_DIR, { recursive: true });
-
+if (!fs.existsSync(VIDEO_DIR)) {
+    fs.mkdirSync(VIDEO_DIR, { recursive: true });
+}
 // Serve generated files statically under /videos
 app.use('/videos', express.static(VIDEO_DIR, {
   setHeaders: (res) => res.setHeader('Content-Type', 'video/mp4')
