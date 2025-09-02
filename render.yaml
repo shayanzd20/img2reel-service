@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: img2reel
+    env: docker
+    region: frankfurt
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "3001"
+      - key: TARGET_WIDTH
+        value: "1080"
+      - key: TARGET_HEIGHT
+        value: "1920"
+      - key: VIDEO_DIR
+        value: "/app/data/videos"
+      - key: BASE_URL
+        value: "https://img2reel.onrender.com" # ← set to your Render URL or custom domain
+    disks:
+      - name: videostore
+        mountPath: /app/data
+        sizeGB: 5
