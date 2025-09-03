@@ -275,3 +275,94 @@ To debug the application using Visual Studio Code, create a `.vscode/launch.json
 ```
 
 This configuration allows you to either launch the app directly or attach to an existing Node.js process for debugging. Make sure to adjust the `program` field to point to your entry file if it's not `server.js`.
+
+---
+
+## Recommended presets (pick one)
+
+### 1) Instagram Reels/Stories standard (sharp, safe choice)
+
+- **1080×1920**, **30 fps**, **20 s**
+
+```bash
+curl -sSfL --retry 2 --max-time 120 -X POST \
+  "http://localhost:3001/image-to-video-stream-compressed" \
+  -d "url=https://story-tempelated.onrender.com/renders/12c3a1e3-14d5-4982-9c6a-46dbcbacf486.png" \
+  -d "duration=20" \
+  -d "fps=30" \
+  -d "width=1080" \
+  -d "height=1920"
+```
+
+### 2) Lightweight (smaller file, faster encode)
+
+- **720×1280**, **24 fps**, **15 s** → good for 512 MB RAM limits
+
+```bash
+curl -sSfL --retry 2 --max-time 120 -X POST \
+  "http://localhost:3001/image-to-video-stream-compressed" \
+  -d "url=https://story-tempelated.onrender.com/renders/12c3a1e3-14d5-4982-9c6a-46dbcbacf486.png" \
+  -d "duration=15" \
+  -d "fps=24" \
+  -d "width=720" \
+  -d "height=1280"
+```
+
+### 3) Ultra-light (minimum size / quickest)
+
+- **540×960**, **24 fps**, **10 s** → ideal for testing or low bandwidth
+
+```bash
+curl -sSfL --retry 2 --max-time 90 -X POST \
+  "http://localhost:3001/image-to-video-stream-compressed" \
+  -d "url=https://story-tempelated.onrender.com/renders/12c3a1e3-14d5-4982-9c6a-46dbcbacf486.png" \
+  -d "duration=10" \
+  -d "fps=24" \
+  -d "width=540" \
+  -d "height=960"
+```
+
+### 4) “Film look” (cinematic)
+
+- **1080×1920**, **24 fps**, **20 s** → slightly smaller than 30 fps, different motion feel
+
+```bash
+curl -sSfL --retry 2 --max-time 120 -X POST \
+  "http://localhost:3001/image-to-video-stream-compressed" \
+  -d "url=https://story-tempelated.onrender.com/renders/12c3a1e3-14d5-4982-9c6a-46dbcbacf486.png" \
+  -d "duration=20" \
+  -d "fps=24" \
+  -d "width=1080" \
+  -d "height=1920"
+```
+
+---
+
+## How to choose (quick rules)
+
+- **Resolution**:
+
+  - 1080×1920 → best quality, bigger files.
+  - 720×1280 → balanced quality/size; safer on small instances.
+  - 540×960 → speed + tiny files.
+
+- **FPS**:
+
+  - 30 fps → crisp motion (default social).
+  - 24 fps → “film look,” \~20% smaller.
+
+- **Duration**: Shorter = quicker encode & smaller file.
+  (You’re using a still image, so 10–20 s is usually enough.)
+- **Your server already pads/letterboxes** to fit the target size, so any source aspect ratio works.
+
+---
+
+## Small cURL upgrades explained
+
+- `-sSfL`: silent progress, fail on HTTP errors, follow redirects.
+- `--retry 2`: auto-retry transient failures.
+- `--max-time N`: avoid hung requests.
+
+---
+
+//
