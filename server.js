@@ -52,29 +52,35 @@ function pickExtFromURL(url) {
 
 /** download remote PNG/JPG to /tmp and return path */
 async function downloadPngOrJpg(url) {
-  const res = await axios.get(url, {
-    responseType: 'arraybuffer',
-    headers: { 
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      'Accept': 'image/jpeg,image/png,image/*,*/*;q=0.8'
+
+  try {
+    const res = await axios.get(url, {
+      responseType: 'arraybuffer',
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'image/jpeg,image/png,image/*,*/*;q=0.8'
+      }
+    });
+    console.log(`Fetching URL: ${url}`);
+    if (res.status!==200) throw new Error(`Fetch failed: --- res.status:${res.status} --- res.statusText: ${res.statusText}`);
+
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const byCT = pickExtFromCT(ct);
+    const byExt = pickExtFromURL(url);
+    const ext = byCT || byExt;
+
+    if (!ext || (byCT && !ALLOWED_CONTENT_TYPES.has(ct))) {
+      throw new Error(`Only PNG or JPG URLs are allowed (got content-type="${ct || 'unknown'}").`);
     }
-  });
-  console.log(`Fetching URL: ${url}`);
-  if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
 
-  const ct = (res.headers.get('content-type') || '').toLowerCase();
-  const byCT = pickExtFromCT(ct);
-  const byExt = pickExtFromURL(url);
-  const ext = byCT || byExt;
-
-  if (!ext || (byCT && !ALLOWED_CONTENT_TYPES.has(ct))) {
-    throw new Error(`Only PNG or JPG URLs are allowed (got content-type="${ct || 'unknown'}").`);
+    const filePath = path.join('/tmp', `${uuidv4()}${ext}`);
+    const buf = Buffer.from(res.data);
+    fs.writeFileSync(filePath, buf);
+    return filePath;
+  } catch (error) {
+    console.error(`Error downloading image: ${error.message || error}`);
+    throw error;
   }
-
-  const filePath = path.join('/tmp', `${uuidv4()}${ext}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  fs.writeFileSync(filePath, buf);
-  return filePath;
 }
 
 /** run ffmpeg and SAVE result (unique filename), then return its public path */
