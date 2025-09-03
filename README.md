@@ -90,7 +90,7 @@ Download the image into memory, then encode.
 
 ```bash
 curl -X POST "http://localhost:3001/image-to-video-buffer" \
-  --data-urlencode "url=https://example.com/promo.jpg" \
+  --data-urlencode "url=https://picsum.photos/200/300" \
   --data-urlencode "duration=20" \
   --data-urlencode "fps=30" \
   --data-urlencode "width=1080" \
@@ -128,7 +128,7 @@ Stream the image directly to disk with a strict byte cap (low memory usage).
 
 ```bash
 curl -X POST "http://localhost:3001/image-to-video-stream" \
-  --data-urlencode "url=https://example.com/promo.jpg" \
+  --data-urlencode "url=https://picsum.photos/200/300" \
   --data-urlencode "duration=20" \
   --data-urlencode "fps=30" \
   --data-urlencode "width=1080" \
@@ -144,7 +144,7 @@ Like #2 but uses CRF/preset (and optional HEVC) to shrink file size.
 ```bash
 # Example with defaults (libx264, CRF 26, preset slow)
 curl -X POST "http://localhost:3001/image-to-video-stream-compressed" \
-  --data-urlencode "url=https://example.com/promo.jpg" \
+  --data-urlencode "url=https://picsum.photos/200/300" \
   --data-urlencode "duration=20" \
   --data-urlencode "fps=30" \
   --data-urlencode "width=1080" \
@@ -156,7 +156,7 @@ To switch to HEVC (if your ffmpeg supports it):
 ```bash
 VIDEO_CODEC=libx265 \
 curl -X POST "http://localhost:3001/image-to-video-stream-compressed" \
-  --data-urlencode "url=https://example.com/promo.jpg"
+  --data-urlencode "url=https://picsum.photos/200/300"
 ```
 
 To make files even smaller:
@@ -164,7 +164,7 @@ To make files even smaller:
 ```bash
 VIDEO_CRF=28 VIDEO_PRESET=veryslow \
 curl -X POST "http://localhost:3001/image-to-video-stream-compressed" \
-  --data-urlencode "url=https://example.com/promo.jpg"
+  --data-urlencode "url=https://picsum.photos/200/300"
 ```
 
 ---
