@@ -75,7 +75,7 @@ async function clearVideoDir() {
     const entries = await fsp.readdir(VIDEO_DIR, { withFileTypes: true });
     const deletions = entries
       .filter((d) => d.isFile() && d.name.toLowerCase().endsWith('.mp4'))
-      .map((d) => fsp.unlink(path.join(VIDEO_DIR, d.name)).catch(() => {}));
+      .map((d) => fsp.unlink(path.join(VIDEO_DIR, d.name)).catch(() => { }));
     await Promise.all(deletions);
   } catch (err) {
     console.error('clearVideoDir failed:', err);
@@ -160,7 +160,7 @@ async function downloadPngOrJpgStream(url) {
     await pipeline(source, out);
     return filePath;
   } catch (err) {
-    try { await fsp.unlink(filePath); } catch {}
+    try { await fsp.unlink(filePath); } catch { }
     throw new Error(`Error downloading image: ${err?.message || String(err)}`);
   }
 }
@@ -240,6 +240,10 @@ function imageToVideo(inPath, { duration, fps, width, height }) {
 }
 
 function imageToVideoCompressed(inPath, { duration, fps, width, height }) {
+  console.log('inPath in imageToVideoCompressed :>> ', inPath);
+  if (!fs.existsSync(inPath)) {
+    return Promise.reject(new Error(`Input file does not exist: ${inPath}`));
+  }
   const id = uuidv4();
   const filename = `reel-${id}.mp4`;
   const outPath = path.join(VIDEO_DIR, filename);
@@ -268,24 +272,39 @@ function imageToVideoCompressed(inPath, { duration, fps, width, height }) {
 
   return new Promise((resolve, reject) => {
     try {
+      if (!inPath || !fs.existsSync(inPath)) {
+        return reject(new Error(`Invalid input file: ${inPath}`));
+      }
+
       const cmd = ffmpeg()
-        .inputOptions(['-nostdin'])
-        .addInput(inPath).inputOptions(['-loop 1'])
+        // still image (video) input
+        .input(inPath)
+        .inputOptions(['-loop 1'])
+        // generated silent audio input via lavfi
+        .input('anullsrc=channel_layout=mono:sample_rate=44100')
+        .inputFormat('lavfi')
+        // video settings
         .videoFilters(vf)
         .fps(fps)
         .videoCodec(codec)
         .outputOptions(vOpts)
-        .addInput('anullsrc=channel_layout=mono:sample_rate=44100')
-        .inputOptions(['-f lavfi'])
+        // audio settings
         .audioCodec('aac')
         .audioChannels(1)
         .audioBitrate(`${AUDIO_BR_KBPS}k`)
+        .on('start', (cmdline) => {
+          console.log('[ffmpeg start]', cmdline);
+        })
+        .on('stderr', (line) => {
+          // helpful while debugging
+          console.log('[ffmpeg stderr]', line);
+        })
         .save(outPath);
 
       cmd.on('end', () => resolve({ id, filename, outPath }));
       cmd.on('error', (err) => reject(err));
     } catch (error) {
-      reject('Error starting ffmpeg: ' + error);
+      reject(new Error('Error starting ffmpeg: ' + error.message || error));
     }
   });
 }
@@ -310,7 +329,7 @@ app.post('/image-to-video-buffer', upload.single('file'), async (req, res) => {
 
     await clearVideoDir();
     const { id, filename } = await imageToVideo(inPath, { duration, fps, width, height });
-    fs.unlink(inPath, () => {}); // cleanup
+    fs.unlink(inPath, () => { }); // cleanup
 
     const relPath = `/videos/${filename}`;
     return res.json({ ok: true, id, filename, duration, fps, width, height, url: absoluteUrl(req, relPath), path: relPath });
@@ -331,7 +350,7 @@ app.post('/image-to-video-stream', upload.single('file'), async (req, res) => {
     const inPath = await downloadPngOrJpgStream(q.url);
     await clearVideoDir();
     const { id, filename } = await imageToVideo(inPath, { duration, fps, width, height });
-    fs.unlink(inPath, () => {}); // cleanup
+    fs.unlink(inPath, () => { }); // cleanup
 
     const relPath = `/videos/${filename}`;
     return res.json({ ok: true, id, filename, duration, fps, width, height, url: absoluteUrl(req, relPath), path: relPath });
@@ -350,9 +369,10 @@ app.post('/image-to-video-stream-compressed', upload.single('file'), async (req,
     if (!q.url) return res.status(400).json({ error: 'Provide ?url=PNG/JPG via ?url=...' });
 
     const inPath = await downloadPngOrJpgStream(q.url);
-    await clearVideoDir();
+    // await clearVideoDir();
+    console.log('inPath', inPath)
     const { id, filename } = await imageToVideoCompressed(inPath, { duration, fps, width, height });
-    fs.unlink(inPath, () => {}); // cleanup
+    fs.unlink(inPath, () => { }); // cleanup
 
     const relPath = `/videos/${filename}`;
     return res.json({ ok: true, id, filename, duration, fps, width, height, url: absoluteUrl(req, relPath), path: relPath });
