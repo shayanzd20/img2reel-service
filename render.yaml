@@ -17,6 +17,8 @@ services:
         value: "/app/data/videos"
       - key: BASE_URL
         value: "https://img2reel.onrender.com" # ← set to your Render URL or custom domain
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=460
     disks:
       - name: videostore
         mountPath: /app/data

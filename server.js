@@ -40,7 +40,7 @@ app.use('/videos', express.static(VIDEO_DIR, {
   setHeaders: (res) => res.setHeader('Content-Type', 'video/mp4'),
 }));
 
-app.get('/health', (_, res) => res.json({ ok: true }));
+app.get('/health', (_, res) => res.json({ ok: true, memoryUsage: process.memoryUsage() }));
 
 // ---------- Helpers ----------
 const ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png']);
@@ -267,6 +267,7 @@ function imageToVideoCompressed(inPath, { duration, fps, width, height }) {
     `-maxrate ${VIDEO_MAXRATE_KBPS}k`,
     `-bufsize ${VIDEO_BUFSIZE_KBPS}k`,
     '-shortest',
+    '-threads 1'
   ];
   if (codec === 'libx265') vOpts.push('-tag:v hvc1'); // iOS/Safari friendliness
 
@@ -387,4 +388,7 @@ app.post('/image-to-video', async (req, res) => res.redirect(307, '/image-to-vid
 app.get('/image-to-video', async (req, res) => res.status(405).json({ error: 'Use POST /image-to-video-stream' }));
 
 // ---------- Start ----------
-app.listen(PORT, () => console.log(`img2reel listening on :${PORT}`));
+app.listen(PORT, () => {
+  console.log(`img2reel listening on :${PORT}`);
+  console.log('NODE_OPTIONS:', process.execArgv);
+});
