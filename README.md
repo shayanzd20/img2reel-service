@@ -365,4 +365,25 @@ curl -sSfL --retry 2 --max-time 120 -X POST \
 
 ---
 
+### 5) Streamed download + **compressed** encode with intro
+
+This example includes an optional intro image that plays before the main video.
+
+```bash
+curl -X POST "http://localhost:3001/image-to-video-stream-compressed" \
+  --data-urlencode "url=https://story-tempelated.onrender.com/renders/12c3a1e3-14d5-4982-9c6a-46dbcbacf486.png" \
+  --data-urlencode "duration=20" \
+  --data-urlencode "fps=30" \
+  --data-urlencode "width=1080" \
+  --data-urlencode "height=1920" \
+  --data-urlencode "introUrl=https://example.com/intro.png" \
+  --data-urlencode "introDuration=3"
+```
+
+In this case:
+
+- `introUrl` specifies the URL of the intro image.
+- `introDuration` sets the duration (in seconds) for the intro image before transitioning to the main video.
+
+The server combines the intro and main video seamlessly into a single MP4 file.
 //

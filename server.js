@@ -239,6 +239,77 @@ function imageToVideo(inPath, { duration, fps, width, height }) {
   });
 }
 
+async function imageToVideoCompressedWithIntro(mainImagePath, opts, introImagePath = null, introDuration = 0) {
+  const id = uuidv4();
+  const filename = `reel-${id}.mp4`;
+  const finalOut = path.join(VIDEO_DIR, filename);
+
+  const tmpIntro = introImagePath ? path.join('/tmp', `intro-${uuidv4()}.mp4`) : null;
+  const tmpMain = path.join('/tmp', `main-${uuidv4()}.mp4`);
+
+  // 1) build main clip using existing function logic (but write to tmpMain)
+  await new Promise((resolve, reject) => {
+    const { duration, fps, width, height } = opts;
+    const vf = [
+      `scale=${width}:${height}:force_original_aspect_ratio=decrease`,
+      `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`,
+      `fps=${fps}`,
+    ].join(',');
+
+    const codec = VIDEO_CODEC;
+    const vOpts = [
+      `-t ${duration}`,
+      '-pix_fmt yuv420p',
+      '-movflags +faststart',
+      `-crf ${VIDEO_CRF}`,
+      `-preset ${VIDEO_PRESET}`,
+      '-tune stillimage',
+      `-g ${VIDEO_KEYINT}`,
+      `-keyint_min ${VIDEO_KEYINT}`,
+      `-maxrate ${VIDEO_MAXRATE_KBPS}k`,
+      `-bufsize ${VIDEO_BUFSIZE_KBPS}k`,
+      '-shortest',
+      '-threads 1',
+    ];
+    if (codec === 'libx265') vOpts.push('-tag:v hvc1');
+
+    ffmpeg()
+      .input(mainImagePath).inputOptions(['-loop 1'])
+      .input('anullsrc=channel_layout=mono:sample_rate=44100')
+      .inputFormat('lavfi')
+      .videoFilters(vf)
+      .fps(opts.fps)
+      .videoCodec(codec)
+      .outputOptions(vOpts)
+      .audioCodec('aac')
+      .audioChannels(1)
+      .audioBitrate(`${AUDIO_BR_KBPS}k`)
+      .on('end', resolve)
+      .on('error', reject)
+      .save(tmpMain);
+  });
+
+  // 2) if intro requested, build intro clip
+  if (introImagePath && introDuration > 0) {
+    await makeStillClip(introImagePath, tmpIntro, {
+      duration: introDuration,
+      fps: opts.fps,
+      width: opts.width,
+      height: opts.height,
+    });
+
+    // 3) concat intro + main into finalOut
+    await concatMp4s([tmpIntro, tmpMain], finalOut);
+    try { await fsp.unlink(tmpIntro); } catch { }
+  } else {
+    // no intro: just move main => finalOut
+    await fsp.copyFile(tmpMain, finalOut);
+  }
+
+  try { await fsp.unlink(tmpMain); } catch { }
+  return { id, filename, outPath: finalOut };
+}
+
 function imageToVideoCompressed(inPath, { duration, fps, width, height }) {
   console.log('inPath in imageToVideoCompressed :>> ', inPath);
   if (!fs.existsSync(inPath)) {
@@ -310,6 +381,75 @@ function imageToVideoCompressed(inPath, { duration, fps, width, height }) {
   });
 }
 
+// --- add near your encoders section ---
+
+async function makeStillClip(inPath, outPath, { duration, fps, width, height }) {
+  const vf = [
+    `scale=${width}:${height}:force_original_aspect_ratio=decrease`,
+    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`,
+    `fps=${fps}`,
+  ].join(',');
+
+  const codec = VIDEO_CODEC;
+  const vOpts = [
+    `-t ${duration}`,
+    '-pix_fmt yuv420p',
+    '-movflags +faststart',
+    `-crf ${VIDEO_CRF}`,
+    `-preset ${VIDEO_PRESET}`,
+    '-tune stillimage',
+    `-g ${VIDEO_KEYINT}`,
+    `-keyint_min ${VIDEO_KEYINT}`,
+    `-maxrate ${VIDEO_MAXRATE_KBPS}k`,
+    `-bufsize ${VIDEO_BUFSIZE_KBPS}k`,
+    '-shortest',
+    '-threads 1',
+  ];
+  if (codec === 'libx265') vOpts.push('-tag:v hvc1');
+
+  return new Promise((resolve, reject) => {
+    ffmpeg()
+      .input(inPath)
+      .inputOptions(['-loop 1'])
+      .input('anullsrc=channel_layout=mono:sample_rate=44100')
+      .inputFormat('lavfi')
+      .videoFilters(vf)
+      .fps(fps)
+      .videoCodec(codec)
+      .outputOptions(vOpts)
+      .audioCodec('aac')
+      .audioChannels(1)
+      .audioBitrate(`${AUDIO_BR_KBPS}k`)
+      .on('end', resolve)
+      .on('error', reject)
+      .save(outPath);
+  });
+}
+
+async function concatMp4s(inputFiles, outPath) {
+  // Use FFmpeg concat demuxer with a temp list file
+  const listPath = path.join('/tmp', `concat-${uuidv4()}.txt`);
+  const listBody = inputFiles.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
+  await fsp.writeFile(listPath, listBody, 'utf8');
+
+  return new Promise((resolve, reject) => {
+    ffmpeg()
+      .input(listPath)
+      .inputOptions(['-f concat', '-safe 0'])
+      .outputOptions(['-c copy', '-movflags +faststart'])
+      .on('end', async () => {
+        try { await fsp.unlink(listPath); } catch { }
+        resolve();
+      })
+      .on('error', async (err) => {
+        try { await fsp.unlink(listPath); } catch { }
+        reject(err);
+      })
+      .save(outPath);
+  });
+}
+
+
 // ---------- Routes ----------
 // 1) Buffer download + basic encode
 app.post('/image-to-video-buffer', upload.single('file'), async (req, res) => {
@@ -366,17 +506,34 @@ app.post('/image-to-video-stream-compressed', upload.single('file'), async (req,
   const q = { ...req.query, ...req.body };
   const { duration, fps, width, height } = parseParams(q);
 
+  const introUrl = q.introUrl;           // NEW
+  const introDuration = Math.min(Math.max(parseInt(q.introDuration || '0', 10), 0), 1); // e.g., cap at 20s
+
   try {
     if (!q.url) return res.status(400).json({ error: 'Provide ?url=PNG/JPG via ?url=...' });
 
-    const inPath = await downloadPngOrJpgStream(q.url);
-    // await clearVideoDir();
-    console.log('inPath', inPath)
-    const { id, filename } = await imageToVideoCompressed(inPath, { duration, fps, width, height });
-    fs.unlink(inPath, () => { }); // cleanup
+    const mainPath = await downloadPngOrJpgStream(q.url);
+    let introPath = null;
+    if (introUrl) {
+      introPath = await downloadPngOrJpgStream(introUrl);
+    }
+    await clearVideoDir(); // TODO: I should check whether I need it again or not
+    const { id, filename } = await imageToVideoCompressedWithIntro(
+      mainPath,
+      { duration, fps, width, height },
+      introPath,
+      introDuration
+    );
+
+    fs.unlink(mainPath, () => { }); // cleanup
+    if (introPath) fs.unlink(introPath, () => { });
 
     const relPath = `/videos/${filename}`;
-    return res.json({ ok: true, id, filename, duration, fps, width, height, url: absoluteUrl(req, relPath), path: relPath });
+    return res.json({
+      ok: true,
+      id, filename, duration, fps, width, height,
+      url: absoluteUrl(req, relPath), path: relPath
+    });
   } catch (e) {
     console.error('Error in POST /image-to-video-stream-compressed:', e);
     return res.status(500).json({ ok: false, error: e.message || String(e) });
